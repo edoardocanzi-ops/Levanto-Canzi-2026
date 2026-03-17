@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hotel Canzi | Premium Calendar</title>
+    
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Hotel Canzi">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
+    <link href="[https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap)" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #000; color: #fff; overflow-x: hidden; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px; }
+        .glass-dark { background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+        .day-cell { aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; font-size: 0.875rem; position: relative; overflow: hidden; }
+        .day-cell:hover:not(.empty) { background: rgba(255, 255, 255, 0.1); border-radius: 12px; }
+        .booked { border-radius: 12px; font-weight: 600; color: #000 !important; }
+        .booked-start { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+        .booked-end { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+        .booked-mid { border-radius: 0; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #000; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+        .owner-mode-badge { background: linear-gradient(135deg, #d4af37 0%, #f9f295 50%, #d4af37 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: bold; }
+    </style>
+</head>
+<body class="min-h-screen bg-black">
+
+    <div id="app" class="max-w-4xl mx-auto px-4 py-12">
+        <header class="text-center mb-16 space-y-4">
+            <h1 class="text-4xl md:text-6xl font-light tracking-tight">Hotel <span class="font-medium">Canzi</span></h1>
+            <p class="text-zinc-500 tracking-widest uppercase text-xs">Levanto 2026</p>
+            <div id="adminBadge" class="hidden text-sm uppercase tracking-widest owner-mode-badge mt-4">Modalità Proprietario Attiva</div>
+        </header>
+
+        <div class="flex justify-center space-x-8 mb-12">
+            <button onclick="changeMonth(5)" id="btn-5" class="month-btn text-zinc-500 hover:text-white transition-colors duration-300">Giugno</button>
+            <button onclick="changeMonth(6)" id="btn-6" class="month-btn text-white border-b border-white pb-1 font-medium transition-colors duration-300">Luglio</button>
+            <button onclick="changeMonth(7)" id="btn-7" class="month-btn text-zinc-500 hover:text-white transition-colors duration-300">Agosto</button>
+        </div>
+
+        <div class="glass p-8 mb-12 relative overflow-hidden">
+            <div id="calendarHeader" class="flex justify-between items-center mb-8">
+                <h2 id="monthTitle" class="text-2xl font-light italic">Luglio 2026</h2>
+                <div class="flex space-x-2">
+                    <div class="w-3 h-3 rounded-full bg-white"></div>
+                    <span class="text-xs text-zinc-400 uppercase tracking-tighter">Occupato</span>
+                </div>
+            </div>
+
+            <div class="calendar-grid mb-4">
+                <div class="text-center text-zinc-600 text-[10px] uppercase font-bold">Lun</div>
+                <div class="text-center text-zinc-600 text-[10px] uppercase font-bold">Mar</div>
+                <div class="text-center text-zinc-600 text-[10px] uppercase font-bold">Mer</div>
+                <div class="text-center text-zinc-600 text-[10px] uppercase font-bold">Gio</div>
+                <div class="text-center text-zinc-600 text-[10px] uppercase font-bold">Ven</div>
+                <div class="text-center text-zinc-600 text-[10px] uppercase font-bold">Sab</div>
+                <div class="text-center text-zinc-600 text-[10px] uppercase font-bold">Dom</div>
+            </div>
+
+            <div id="calendarDays" class="calendar-grid"></div>
+        </div>
+
+        <div class="space-y-6">
+            <div class="flex justify-between items-end">
+                <h3 class="text-xl font-light">Ospiti Confermati</h3>
+                <button onclick="toggleAdmin()" class="text-[10px] text-zinc-700 hover:text-zinc-400 uppercase tracking-widest transition-colors">Accesso Proprietario</button>
+            </div>
+            <div id="bookingsList" class="space-y-4"></div>
+        </div>
+    </div>
+
+    <!-- Modale Prenotazione -->
+    <div id="bookingModal" class="fixed inset-0 z-50 flex items-center justify-center hidden px-4">
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeModal()"></div>
+        <div class="glass-dark w-full max-w-md p-8 relative z-10">
+            <h3 class="text-2xl font-light mb-6">Nuova Prenotazione</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs text-zinc-500 uppercase mb-2">Nome Ospite</label>
+                    <input type="text" id="guestName" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 focus:outline-none focus:border-white/30 transition-all" placeholder="Esempio: Marco & Sofia">
+                </div>
+                <div>
+                    <label class="block text-xs text-zinc-500 uppercase mb-2">Colore Etichetta</label>
+                    <div class="flex space-x-3" id="colorPicker">
+                        <button class="w-8 h-8 rounded-full bg-[#f8fafc] ring-2 ring-offset-2 ring-offset-black ring-white opacity-100 color-btn transition-all" data-color="#f8fafc" title="Bianco"></button>
+                        <button class="w-8 h-8 rounded-full bg-[#fde047] ring-white opacity-50 hover:opacity-100 color-btn transition-all" data-color="#fde047" title="Oro"></button>
+                        <button class="w-8 h-8 rounded-full bg-[#86efac] ring-white opacity-50 hover:opacity-100 color-btn transition-all" data-color="#86efac" title="Smeraldo"></button>
+                        <button class="w-8 h-8 rounded-full bg-[#93c5fd] ring-white opacity-50 hover:opacity-100 color-btn transition-all" data-color="#93c5fd" title="Zaffiro"></button>
+                        <button class="w-8 h-8 rounded-full bg-[#fca5a5] ring-white opacity-50 hover:opacity-100 color-btn transition-all" data-color="#fca5a5" title="Rubino"></button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs text-zinc-500 uppercase mb-2">Dal (GG/MM/AAAA)</label>
+                        <input type="text" id="startDate" placeholder="GG/MM/AAAA" maxlength="10" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 focus:outline-none text-sm tracking-wider text-center">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-zinc-500 uppercase mb-2">Al (GG/MM/AAAA)</label>
+                        <input type="text" id="endDate" placeholder="GG/MM/AAAA" maxlength="10" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 focus:outline-none text-sm tracking-wider text-center">
+                    </div>
+                </div>
+                <button onclick="saveBooking()" class="w-full bg-white text-black font-medium p-4 rounded-xl mt-4 hover:bg-zinc-200 transition-colors">Conferma Soggiorno</button>
+                <button onclick="closeModal()" class="w-full bg-transparent text-zinc-500 text-sm p-2 hover:text-white transition-colors">Annulla</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modale Login Admin -->
+    <div id="adminModal" class="fixed inset-0 z-50 flex items-center justify-center hidden px-4">
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeAdminModal()"></div>
+        <div class="glass-dark w-full max-w-sm p-8 relative z-10 text-center">
+            <h3 class="text-xl font-light mb-4">Codice Proprietario</h3>
+            <input type="password" id="adminCodeInput" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 mb-2 text-center tracking-[0.5em] focus:outline-none focus:border-white/30" placeholder="****">
+            <p id="adminError" class="text-red-500 text-xs mb-4 hidden">Codice errato</p>
+            <button onclick="verifyAdminCode()" class="w-full bg-white text-black font-medium p-3 rounded-xl hover:bg-zinc-200 transition-colors">Accedi</button>
+            <button onclick="closeAdminModal()" class="w-full mt-2 bg-transparent text-zinc-500 text-sm p-2 hover:text-white transition-colors">Annulla</button>
+        </div>
+    </div>
+
+    <!-- Modale Messaggi / Conferma -->
+    <div id="messageModal" class="fixed inset-0 z-50 flex items-center justify-center hidden px-4">
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeMessageModal()"></div>
+        <div class="glass-dark w-full max-w-sm p-8 relative z-10 text-center">
+            <h3 id="messageTitle" class="text-xl font-light mb-4">Avviso</h3>
+            <p id="messageText" class="text-zinc-400 text-sm mb-6"></p>
+            <button id="messageConfirmBtn" class="w-full bg-white text-black font-medium p-3 rounded-xl hover:bg-zinc-200 transition-colors">OK</button>
+            <button id="messageCancelBtn" class="w-full mt-2 bg-transparent text-zinc-500 text-sm p-2 hover:text-white transition-colors hidden">Annulla</button>
+        </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
+
+
+4. app.js
+
+Questo è il file logico in cui DEVI sostituire LA_TUA_API_KEY e le altre variabili con quelle fornite dal tuo progetto Firebase.
+
+import { initializeApp } from "[https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js](https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js)";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "[https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js](https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js)";
+import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } from "[https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js](https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js)";
+
+// INSERISCI QUI LE TUE CREDENZIALI FIREBASE
+const firebaseConfig = {
+    apiKey: "LA_TUA_API_KEY",
+    authDomain: "IL_TUO_AUTH_DOMAIN",
+    projectId: "IL_TUO_PROJECT_ID",
+    storageBucket: "IL_TUO_STORAGE_BUCKET",
+    messagingSenderId: "IL_TUO_MESSAGING_SENDER_ID",
+    appId: "IL_TUO_APP_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = 'hotel-canzi-2026';
+
+let currentMonth = 6;
+let bookings = [];
+let isOwner = false;
+let currentUser = null;
+let selectedColor = '#f8fafc';
+const ADMIN_CODE = "2026";
+
+const formatItalianDate = (dateStr) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+};
+
+const parseItalianDate = (dateStr) => {
+    if (!dateStr) return null;
+    const parts = dateStr.split('/');
+    if (parts.length !== 3) return null;
+    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+};
+
+const handleDateInput = (e) => {
+    if (e.inputType === 'deleteContentBackward') return; 
+    let v = e.target.value.replace(/\D/g,'');
+    if (v.length > 8) v = v.substring(0, 8);
+    if (v.length > 4) {
+        e.target.value = `${v.substring(0,2)}/${v.substring(2,4)}/${v.substring(4)}`;
+    } else if (v.length > 2) {
+        e.target.value = `${v.substring(0,2)}/${v.substring(2)}`;
+    } else {
+        e.target.value = v;
+    }
+};
+
+async function init() {
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW Setup:', err));
+    }
+    try {
+        await signInAnonymously(auth);
+        onAuthStateChanged(auth, (user) => {
+            currentUser = user;
+            if (user) loadBookings();
+        });
+    } catch (error) {
+        console.error("Auth error:", error);
+    }
+}
+
+function loadBookings() {
+    const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'bookings');
+    onSnapshot(colRef, (snapshot) => {
+        bookings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        renderCalendar();
+        renderBookingsList();
+    }, (err) => {
+        console.error("Error fetching bookings:", err);
+    });
+}
+
+window.changeMonth = (m) => {
+    currentMonth = m;
+    document.querySelectorAll('.month-btn').forEach(btn => {
+        btn.classList.remove('text-white', 'border-b', 'font-medium');
+        btn.classList.add('text-zinc-500');
+    });
+    document.getElementById(`btn-${m}`).classList.add('text-white', 'border-b', 'font-medium');
+    document.getElementById(`btn-${m}`).classList.remove('text-zinc-500');
+    renderCalendar();
+};
+
+window.showMessage = (title, text, isConfirm = false, confirmCallback = null) => {
+    document.getElementById('messageTitle').innerText = title;
+    document.getElementById('messageText').innerText = text;
+    document.getElementById('messageModal').classList.remove('hidden');
+    
+    const confirmBtn = document.getElementById('messageConfirmBtn');
+    const cancelBtn = document.getElementById('messageCancelBtn');
+    
+    confirmBtn.onclick = () => {
+        closeMessageModal();
+        if (confirmCallback) confirmCallback();
+    };
+
+    if (isConfirm) {
+        cancelBtn.classList.remove('hidden');
+        cancelBtn.onclick = closeMessageModal;
+    } else {
+        cancelBtn.classList.add('hidden');
+    }
+};
+
+window.closeMessageModal = () => document.getElementById('messageModal').classList.add('hidden');
+
+window.toggleAdmin = () => {
+    if (isOwner) {
+        isOwner = false;
+        document.getElementById('adminBadge').classList.add('hidden');
+        renderCalendar();
+        renderBookingsList();
+        return;
+    }
+    document.getElementById('adminCodeInput').value = '';
+    document.getElementById('adminError').classList.add('hidden');
+    document.getElementById('adminModal').classList.remove('hidden');
+};
+
+window.closeAdminModal = () => document.getElementById('adminModal').classList.add('hidden');
+
+window.verifyAdminCode = () => {
+    const pass = document.getElementById('adminCodeInput').value;
+    if (pass === ADMIN_CODE) {
+        isOwner = true;
+        document.getElementById('adminBadge').classList.remove('hidden');
+        closeAdminModal();
+        renderCalendar();
+        renderBookingsList();
+    } else {
+        document.getElementById('adminError').classList.remove('hidden');
+    }
+};
+
+window.closeModal = () => document.getElementById('bookingModal').classList.add('hidden');
+
+document.getElementById('startDate').addEventListener('input', handleDateInput);
+document.getElementById('endDate').addEventListener('input', handleDateInput);
+
+document.querySelectorAll('.color-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.color-btn').forEach(b => {
+            b.classList.remove('ring-2', 'ring-offset-2', 'ring-offset-black', 'opacity-100');
+            b.classList.add('opacity-50');
+        });
+        const target = e.currentTarget;
+        target.classList.remove('opacity-50');
+        target.classList.add('ring-2', 'ring-offset-2', 'ring-offset-black', 'opacity-100');
+        selectedColor = target.dataset.color;
+    });
+});
+
+window.openModal = (dateStr) => {
+    if (!isOwner) return;
+    const formattedDate = formatItalianDate(dateStr);
+    document.getElementById('startDate').value = formattedDate;
+    document.getElementById('endDate').value = formattedDate;
+    document.querySelector('.color-btn[data-color="#f8fafc"]').click();
+    document.getElementById('bookingModal').classList.remove('hidden');
+};
+
+window.saveBooking = async () => {
+    const name = document.getElementById('guestName').value;
+    const startInput = document.getElementById('startDate').value;
+    const endInput = document.getElementById('endDate').value;
+    const start = parseItalianDate(startInput);
+    const end = parseItalianDate(endInput);
+
+    if (!name || !start || !end) return showMessage("Attenzione", "Compila tutti i campi.");
+    if (start > end) return showMessage("Attenzione", "La data di fine non può precedere quella di inizio.");
+    if (!currentUser) return showMessage("Attesa", "Connessione al server in corso.");
+
+    try {
+        const docRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'));
+        await setDoc(docRef, { guestName: name, startDate: start, endDate: end, guestColor: selectedColor, createdAt: Date.now() });
+        closeModal();
+        document.getElementById('guestName').value = "";
+    } catch (e) {
+        console.error("Error saving booking:", e);
+        showMessage("Errore", "Salvataggio fallito.");
+    }
+};
+
+window.deleteBooking = (id) => {
+    if (!isOwner) return;
+    showMessage("Conferma", "Vuoi rimuovere questo ospite?", true, async () => {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bookings', id));
+    });
+};
+
+function renderCalendar() {
+    const container = document.getElementById('calendarDays');
+    const title = document.getElementById('monthTitle');
+    container.innerHTML = '';
+    
+    const monthNames = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
+    title.innerText = `${monthNames[currentMonth]} 2026`;
+
+    const firstDay = new Date(2026, currentMonth, 1).getDay();
+    const daysInMonth = new Date(2026, currentMonth + 1, 0).getDate();
+    let startOffset = firstDay === 0 ? 6 : firstDay - 1;
+
+    for (let i = 0; i < startOffset; i++) {
+        const empty = document.createElement('div');
+        empty.className = 'day-cell empty';
+        container.appendChild(empty);
+    }
+
+    for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(2026, currentMonth, d);
+        const dateStr = date.toISOString().split('T')[0];
+        const dayEl = document.createElement('div');
+        dayEl.className = 'day-cell';
+        let cellContent = `<span>${d}</span>`;
+
+        const booking = bookings.find(b => dateStr >= b.startDate && dateStr <= b.endDate);
+        if (booking) {
+            dayEl.classList.add('booked');
+            dayEl.style.backgroundColor = booking.guestColor || '#f8fafc';
+            if (dateStr === booking.startDate) dayEl.classList.add('booked-start');
+            if (dateStr === booking.endDate) dayEl.classList.add('booked-end');
+            if (dateStr > booking.startDate && dateStr < booking.endDate) dayEl.classList.add('booked-mid');
+            cellContent += `<span class="text-[8px] sm:text-[10px] leading-tight truncate w-full text-center px-1 font-medium mt-0.5 opacity-80">${booking.guestName}</span>`;
+        }
+        
+        dayEl.innerHTML = cellContent;
+        dayEl.onclick = () => openModal(dateStr);
+        container.appendChild(dayEl);
+    }
+}
+
+function renderBookingsList() {
+    const container = document.getElementById('bookingsList');
+    container.innerHTML = '';
+
+    const relevantBookings = bookings
+        .filter(b => {
+            const d = new Date(b.startDate);
+            return d.getFullYear() === 2026 && d.getMonth() >= 5 && d.getMonth() <= 7;
+        })
+        .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+
+    if (relevantBookings.length === 0) {
+        container.innerHTML = '<div class="text-zinc-600 text-center py-8 italic font-light">Nessuna prenotazione.</div>';
+        return;
+    }
+
+    relevantBookings.forEach(b => {
+        const card = document.createElement('div');
+        card.className = 'glass-dark p-6 flex justify-between items-center group transition-all hover:border-white/20';
+        const start = formatItalianDate(b.startDate);
+        const end = formatItalianDate(b.endDate);
+
+        card.innerHTML = `
+            <div class="flex items-center space-x-6">
+                <div class="flex items-center space-x-3">
+                    <div class="w-3 h-3 rounded-full flex-shrink-0" style="background-color: ${b.guestColor || '#f8fafc'}"></div>
+                    <div class="text-sm md:text-lg font-light text-zinc-400 uppercase tracking-widest leading-tight">${start} <br/> ${end}</div>
+                </div>
+                <div>
+                    <div class="text-lg font-medium">${b.guestName}</div>
+                    <div class="text-[10px] text-zinc-500 uppercase tracking-tighter">Confermato</div>
+                </div>
+            </div>
+            ${isOwner ? `<button onclick="deleteBooking('${b.id}')" class="opacity-0 group-hover:opacity-100 transition-opacity text-red-800 text-xs uppercase tracking-widest px-4 py-2 hover:text-red-500">Rimuovi</button>` : ''}
+        `;
+        container.appendChild(card);
+    });
+}
+
+init();
